@@ -39,3 +39,10 @@ class InvalidInstrumentId(RobinhoodException):
         When an invalid instrument id is given
     """
     pass
+
+class InvalidCoinSymbol(RobinhoodException):
+    """
+        When an invalid coin symbol (crypto coin symbol) is given
+    """
+
+    pass
