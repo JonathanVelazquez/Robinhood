@@ -2,6 +2,7 @@
 
 #Standard libraries
 import logging
+import uuid
 import warnings
 
 from enum import Enum
@@ -52,6 +53,18 @@ class Robinhood:
 
     client_id = "c82SH0WZOsabOXGP2sxqcj34FxkvfnWRZBKlBjFS"
 
+    crypto_account_id = None
+
+    crypto_pairs = \
+        {
+            'BTCUSD': '3d961844-d360-45fc-989b-f6fca761d511',
+            'ETHUSD': '76637d50-c702-4ed1-bcb5-5b0732a81f48',
+            'ETCUSD': '7b577ce3-489d-4269-9408-796a0d1abb3a',
+            'BCHUSD': '2f2b77c4-e426-4271-ae49-18d5cb296d3a',
+            'BSVUSD': '086a8f9f-6c39-43fa-ac9f-57952f4a1ba6',
+            'LTCUSD': '383280b1-ff53-43fc-9c84-f01afd0989cd',
+            'DOGEUSD': '1ef78e1b-049b-4f12-90e5-555dcf2fe204'
+        }
 
     ###########################################################################
     #                       Logging in and initializing
@@ -1708,3 +1721,76 @@ class Robinhood:
         # Order type cannot be cancelled without a valid cancel link
         else:
             raise ValueError('Unable to cancel order ID: ' + order_id)
+
+    def place_buy_order_crypto(self, crypto_id, qty, price=None):
+
+
+        payload = {
+            'type': 'market',
+            'side': 'buy',
+            'quantity': qty,
+            'account_id': self.get_crypto_account(),
+            'currency_pair_id': self.crypto_pairs[crypto_id],
+            'price': self.crypto_currency_quote_data()['mark_price'],
+            'ref_id': str(uuid.uuid4()),
+            'time_in_force': "gtc"
+        }
+
+        try:
+            res = self.session.post(endpoints.orders(), data=payload, timeout=15)
+            res.raise_for_status()
+
+            return res
+
+        except Exception as ex:  # sometimes Robinhood asks for another log in when placing an order
+            try:
+                self.auth_method()
+            except:
+                print(ex)
+
+    def crypto_currency_quote_data(self, coin=''):
+        """Fetch cypto_currency_coin_quote
+
+            Args:
+                coin (str or dict): coin symbol or coin id
+
+            Returns:
+                (:obj:`dict`): JSON contents from forex market`quotes` endpoint
+        """
+
+        if isinstance(coin, dict):
+            if "symbol" in coin.keys():
+                url = str(endpoints.forex_market_data_quotes()) + coin["symbol"] + "/"
+        elif isinstance(coin, str):
+            url = str(endpoints.forex_market_data_quotes()) + coin + "/"
+        elif isinstance(coin, unicode):
+            url = str(endpoints.forex_market_data_quotes()) + str(coin) + "/"
+        else:
+            raise RH_exception.InvalidCoinSymbol()
+
+        # Check for validity of symbol
+        try:
+            req = self.session.get(url, headers=self.headers, timeout=15)
+            req.raise_for_status()
+            data = req.json()
+        except requests.exceptions.HTTPError:
+            raise RH_exception.InvalidTickerSymbol()
+
+        return data
+
+    def get_crypto_account(self):
+        if self.crypto_account_id is None:
+            url = endpoints.crypto_account()
+
+            try:
+                res = self.session.get(endpoints.crypto_account(), timeout=15)
+                res.raise_for_status()  # auth required
+                res = res.json()
+
+                self.crypto_account_id = res['results'][0]['id']
+
+                return self.crypto_account_id
+            except requests.exceptions.HTTPError:
+                RH_exception.RobinhoodException()
+        else:
+            return self.crypto_account_id
